@@ -1,4 +1,3 @@
-from crewai import Crew, Agent, Task
 from dotenv import load_dotenv
 import os
 import io
@@ -57,12 +56,6 @@ def _patch_crewai_cache_breakpoint():
 
     LLM._format_messages_for_provider = _patched
 
-_patch_crewai_cache_breakpoint()
-from agents.prospector import ProspectorAgent
-from agents.analyzer import AnalyzerAgent
-from agents.quote_visual import QuoteVisualAgent
-from agents.outreach import OutreachAgent
-
 load_dotenv()
 
 # Initialize reusable globals
@@ -82,6 +75,13 @@ current_location = None
 
 
 def initialize_crew(model="llama-3.3-70b-versatile", provider="groq"):
+    # All crewai imports are lazy here — avoids chromadb/pydantic crash at app startup
+    from crewai import Crew, Agent, Task
+    from agents.prospector import ProspectorAgent
+    from agents.analyzer import AnalyzerAgent
+    from agents.quote_visual import QuoteVisualAgent
+    from agents.outreach import OutreachAgent
+    _patch_crewai_cache_breakpoint()
     global llm, prospector_agent, analyzer_agent, quote_visual_agent, outreach_agent
     global crew, prospect_task, analyze_task, quote_visual_task, outreach_task
     global current_provider, current_model, current_location
@@ -346,6 +346,7 @@ def run_crew(target_location="Springfield, IL", search_radius=10, model="llama-3
     def _kickoff_sub_crew():
         """Run 3-task crew (analyze+quote+outreach); auto-retry with Cerebras on Groq daily limit."""
         def _run():
+            from crewai import Crew
             with _silence():
                 return Crew(
                     agents=[analyzer_agent, quote_visual_agent, outreach_agent],
