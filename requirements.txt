@@ -1,6 +1,8 @@
 streamlit>=1.28.0
 streamlit-folium>=0.15.0
-crewai>=0.80.0
+crewai==1.14.5a5
+pydantic-settings>=2.0.0
+pydantic>=2.0.0
 litellm>=1.0.0
 langchain>=0.1.0
 langchain-community>=0.0.20
@@ -10,7 +12,6 @@ langchain-anthropic>=0.1.0
 duckduckgo-search>=5.0
 requests>=2.31.0
 python-dotenv>=1.0.0
-pydantic>=2.0.0
 Pillow>=10.0.0
 opencv-python-headless>=4.8.0
 homeharvest>=0.3.5

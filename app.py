@@ -8,7 +8,7 @@ from streamlit_folium import st_folium
 try:
     from crew import run_crew
     CREW_AVAILABLE = True
-except ImportError:
+except Exception:
     CREW_AVAILABLE = False
 
 from utils.llm_factory import get_available_models, get_provider_info
