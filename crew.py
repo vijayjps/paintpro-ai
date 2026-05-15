@@ -27,6 +27,14 @@ def _stub_chromadb():
             return iter([])
         def __bool__(self):
             return False
+        def __or__(self, other):   # TypeA | TypeB union syntax
+            return self
+        def __ror__(self, other):
+            return self
+        def __and__(self, other):
+            return self
+        def __class_getitem__(cls, item):  # Generic[X] syntax
+            return cls
 
     class _ChromaFinder(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path, target=None):
