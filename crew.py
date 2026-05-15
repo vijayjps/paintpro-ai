@@ -1,8 +1,42 @@
 from dotenv import load_dotenv
 import os
+import sys
+import types as _types
 import io
 import contextlib
 import time
+
+
+def _stub_chromadb():
+    """
+    Pre-register chromadb stubs so crewai's RAG module never triggers the
+    pydantic v2 'unable to infer type for attribute chroma_server_nofile' error.
+    We don't use any knowledge/RAG features, so this is safe.
+    """
+    _mods = [
+        "chromadb", "chromadb.config", "chromadb.api", "chromadb.api.client",
+        "chromadb.api.models", "chromadb.api.types", "chromadb.types",
+        "chromadb.errors", "chromadb.telemetry", "chromadb.telemetry.product",
+        "chromadb.telemetry.product.posthog", "chromadb.auth",
+        "chromadb.auth.providers", "chromadb.auth.registry",
+        "chromadb.segment", "chromadb.db", "chromadb.db.impl",
+    ]
+    for _m in _mods:
+        if _m not in sys.modules:
+            sys.modules[_m] = _types.ModuleType(_m)
+
+    # Minimal Settings class that crewai/chromadb internals may reference
+    class _FakeSettings:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+        def __getattr__(self, name):
+            return None
+
+    sys.modules["chromadb.config"].Settings = _FakeSettings
+    sys.modules["chromadb"].Settings = _FakeSettings
+    sys.modules["chromadb"].Client = lambda *a, **kw: None
+    sys.modules["chromadb"].EphemeralClient = lambda *a, **kw: None
 from utils.llm_factory import get_llm
 from tools.property_scraper import fetch_leads, fetch_recently_sold, format_leads_for_agent, format_recently_sold_for_agent
 from tools.web_intelligence import gather_web_intelligence, format_web_intel_for_agent
@@ -75,6 +109,8 @@ current_location = None
 
 
 def initialize_crew(model="llama-3.3-70b-versatile", provider="groq"):
+    # Stub chromadb FIRST — must happen before any crewai import touches it
+    _stub_chromadb()
     # All crewai imports are lazy here — avoids chromadb/pydantic crash at app startup
     from crewai import Crew, Agent, Task
     from agents.prospector import ProspectorAgent
