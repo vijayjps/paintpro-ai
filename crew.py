@@ -18,6 +18,10 @@ def _stub_chromadb():
 
     class _AutoStub(_types.ModuleType):
         def __getattr__(self, name):
+            # Raise AttributeError for dunders — lets Pydantic/Python fall back to
+            # default behavior instead of recursing into stub introspection.
+            if name.startswith("__") and name.endswith("__"):
+                raise AttributeError(name)
             child = _AutoStub(f"{self.__name__}.{name}")
             setattr(self, name, child)
             return child
@@ -238,8 +242,10 @@ def run_crew(target_location="Springfield, IL", search_radius=10, model="llama-3
             with _silence():
                 initialize_crew(model=model, provider=provider)
         except Exception as exc:
+            import traceback as _tb
+            _trace = _tb.format_exc(limit=12)
             return {
-                "prospector": f"Fallback: could not initialize crew due to {exc}",
+                "prospector": f"Fallback: could not initialize crew due to {exc}\n\n{_trace}",
                 "analyzer": "Fallback analysis result.",
                 "quote_visual": {
                     "quote_range": "$3,500-$4,500",
