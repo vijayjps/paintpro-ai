@@ -45,6 +45,13 @@ def _stub_chromadb():
             return False
         def __subclasscheck__(self, subclass):
             return False
+        @classmethod
+        def __get_pydantic_core_schema__(cls, source_type, handler):
+            import pydantic_core
+            return pydantic_core.core_schema.any_schema()
+        @classmethod
+        def __get_validators__(cls):
+            yield lambda v: v
 
     class _ChromaFinder(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path, target=None):
