@@ -9,32 +9,44 @@ import time
 
 def _stub_chromadb():
     """
-    Replace chromadb with auto-filling stubs so crewai's RAG imports never fail.
-    Any attribute access on the stub returns another stub — satisfies all
-    'from chromadb.x import Y' patterns without needing to know Y in advance.
-    We don't use RAG/knowledge features so this is completely safe.
+    Hook into Python's import machinery to intercept EVERY chromadb.* import
+    and return an auto-filling stub. No need to list individual submodules.
+    Safe because this app uses none of crewai's RAG/knowledge features.
     """
+    import importlib.abc
+    import importlib.machinery
+
     class _AutoStub(_types.ModuleType):
-        """Module that returns a new AutoStub for every attribute access."""
         def __getattr__(self, name):
             child = _AutoStub(f"{self.__name__}.{name}")
             setattr(self, name, child)
             return child
         def __call__(self, *a, **kw):
-            return self
+            return _AutoStub("_call_result")
         def __iter__(self):
             return iter([])
+        def __bool__(self):
+            return False
 
-    # List every chromadb sub-package crewai might walk into
-    _prefixes = [
-        "chromadb", "chromadb.api", "chromadb.config", "chromadb.types",
-        "chromadb.errors", "chromadb.auth", "chromadb.segment", "chromadb.db",
-        "chromadb.telemetry", "chromadb.telemetry.product",
-        "chromadb.telemetry.product.posthog",
-    ]
-    for _p in _prefixes:
-        if _p not in sys.modules:
-            sys.modules[_p] = _AutoStub(_p)
+    class _ChromaFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path, target=None):
+            if fullname == "chromadb" or fullname.startswith("chromadb."):
+                return importlib.machinery.ModuleSpec(fullname, _ChromaLoader())
+            return None
+
+    class _ChromaLoader(importlib.abc.Loader):
+        def create_module(self, spec):
+            return _AutoStub(spec.name)
+        def exec_module(self, module):
+            pass
+
+    # Only install once
+    if not any(isinstance(f, _ChromaFinder) for f in sys.meta_path):
+        sys.meta_path.insert(0, _ChromaFinder())
+    # Also clear any already-imported real chromadb modules
+    for _k in list(sys.modules):
+        if _k == "chromadb" or _k.startswith("chromadb."):
+            del sys.modules[_k]
 from utils.llm_factory import get_llm
 from tools.property_scraper import fetch_leads, fetch_recently_sold, format_leads_for_agent, format_recently_sold_for_agent
 from tools.web_intelligence import gather_web_intelligence, format_web_intel_for_agent
