@@ -9,34 +9,32 @@ import time
 
 def _stub_chromadb():
     """
-    Pre-register chromadb stubs so crewai's RAG module never triggers the
-    pydantic v2 'unable to infer type for attribute chroma_server_nofile' error.
-    We don't use any knowledge/RAG features, so this is safe.
+    Replace chromadb with auto-filling stubs so crewai's RAG imports never fail.
+    Any attribute access on the stub returns another stub — satisfies all
+    'from chromadb.x import Y' patterns without needing to know Y in advance.
+    We don't use RAG/knowledge features so this is completely safe.
     """
-    _mods = [
-        "chromadb", "chromadb.config", "chromadb.api", "chromadb.api.client",
-        "chromadb.api.models", "chromadb.api.types", "chromadb.types",
-        "chromadb.errors", "chromadb.telemetry", "chromadb.telemetry.product",
-        "chromadb.telemetry.product.posthog", "chromadb.auth",
-        "chromadb.auth.providers", "chromadb.auth.registry",
-        "chromadb.segment", "chromadb.db", "chromadb.db.impl",
-    ]
-    for _m in _mods:
-        if _m not in sys.modules:
-            sys.modules[_m] = _types.ModuleType(_m)
-
-    # Minimal Settings class that crewai/chromadb internals may reference
-    class _FakeSettings:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
+    class _AutoStub(_types.ModuleType):
+        """Module that returns a new AutoStub for every attribute access."""
         def __getattr__(self, name):
-            return None
+            child = _AutoStub(f"{self.__name__}.{name}")
+            setattr(self, name, child)
+            return child
+        def __call__(self, *a, **kw):
+            return self
+        def __iter__(self):
+            return iter([])
 
-    sys.modules["chromadb.config"].Settings = _FakeSettings
-    sys.modules["chromadb"].Settings = _FakeSettings
-    sys.modules["chromadb"].Client = lambda *a, **kw: None
-    sys.modules["chromadb"].EphemeralClient = lambda *a, **kw: None
+    # List every chromadb sub-package crewai might walk into
+    _prefixes = [
+        "chromadb", "chromadb.api", "chromadb.config", "chromadb.types",
+        "chromadb.errors", "chromadb.auth", "chromadb.segment", "chromadb.db",
+        "chromadb.telemetry", "chromadb.telemetry.product",
+        "chromadb.telemetry.product.posthog",
+    ]
+    for _p in _prefixes:
+        if _p not in sys.modules:
+            sys.modules[_p] = _AutoStub(_p)
 from utils.llm_factory import get_llm
 from tools.property_scraper import fetch_leads, fetch_recently_sold, format_leads_for_agent, format_recently_sold_for_agent
 from tools.web_intelligence import gather_web_intelligence, format_web_intel_for_agent
