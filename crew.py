@@ -16,57 +16,79 @@ def _stub_chromadb():
     import importlib.abc
     import importlib.machinery
 
-    class _AutoStub(_types.ModuleType):
-        def __getattr__(self, name):
-            # Raise AttributeError for dunders — lets Pydantic/Python fall back to
-            # default behavior instead of recursing into stub introspection.
+    class _AutoStub(type):
+        """
+        Metaclass-based stub: instances ARE classes (isinstance(stub, type) == True).
+        This satisfies Pydantic's 'Expected a class' check and all isinstance guards
+        in crewai without needing the real chromadb package.
+        """
+        def __new__(mcs, name, bases=None, namespace=None, **kw):
+            if bases is None and namespace is None:
+                return type.__new__(mcs, name, (object,), {})
+            return type.__new__(mcs, name, bases or (object,), namespace or {})
+
+        def __init__(cls, name, bases=None, namespace=None, **kw):
+            if bases is None and namespace is None:
+                type.__init__(cls, name, (object,), {})
+            else:
+                type.__init__(cls, name, bases or (object,), namespace or {})
+
+        def __getattr__(cls, name):
             if name.startswith("__") and name.endswith("__"):
                 raise AttributeError(name)
-            child = _AutoStub(f"{self.__name__}.{name}")
-            setattr(self, name, child)
+            child = _AutoStub(f"{cls.__name__}.{name}")
+            setattr(cls, name, child)
             return child
-        def __call__(self, *a, **kw):
+
+        def __call__(cls, *a, **kw):
             return _AutoStub("_call_result")
-        def __iter__(self):
+
+        def __iter__(cls):
             return iter([])
-        def __bool__(self):
+
+        def __bool__(cls):
             return False
-        def __or__(self, other):
-            return self
-        def __ror__(self, other):
-            return self
-        def __and__(self, other):
-            return self
-        def __class_getitem__(cls, item):
+
+        def __or__(cls, other):
             return cls
-        def __mro_entries__(self, bases):  # used as base class: substitute object
+
+        def __ror__(cls, other):
+            return cls
+
+        def __and__(cls, other):
+            return cls
+
+        def __mro_entries__(cls, bases):
             return (object,)
-        def __instancecheck__(self, instance):
+
+        def __instancecheck__(cls, instance):
             return False
-        def __subclasscheck__(self, subclass):
+
+        def __subclasscheck__(cls, subclass):
             return False
-        @classmethod
+
         def __get_pydantic_core_schema__(cls, source_type, handler):
             import pydantic_core
             return pydantic_core.core_schema.any_schema()
-        @classmethod
+
         def __get_validators__(cls):
             yield lambda v: v
+
+        def __repr__(cls):
+            return f"<chromadb_stub '{cls.__name__}'>"
 
     class _ChromaFinder(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path, target=None):
             if fullname == "chromadb" or fullname.startswith("chromadb."):
                 spec = importlib.machinery.ModuleSpec(fullname, _ChromaLoader())
-                spec.submodule_search_locations = []  # tells Python it's a package
+                spec.submodule_search_locations = []
                 return spec
             return None
 
     class _ChromaLoader(importlib.abc.Loader):
         def create_module(self, spec):
             m = _AutoStub(spec.name)
-            # Set package attrs directly in __dict__ so the dunder guard
-            # in __getattr__ is never triggered for these.
-            m.__path__ = []          # required: marks module as a package
+            m.__path__ = []       # stored in class __dict__, bypasses __getattr__
             m.__package__ = spec.name
             m.__spec__ = spec
             return m
