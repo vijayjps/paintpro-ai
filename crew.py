@@ -58,6 +58,12 @@ def _stub_chromadb():
         def __and__(cls, other):
             return cls
 
+        def __getitem__(cls, item):   # stub[T] — generic subscript
+            return cls
+
+        def __class_getitem__(cls, item):  # fallback for PEP 560 generics
+            return cls
+
         def __mro_entries__(cls, bases):
             return (object,)
 
