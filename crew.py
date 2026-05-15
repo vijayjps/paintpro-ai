@@ -54,10 +54,11 @@ def _stub_chromadb():
         def exec_module(self, module):
             pass
 
-    # Only install once
-    if not any(isinstance(f, _ChromaFinder) for f in sys.meta_path):
+    # Only install once — use a module flag, not isinstance (class is redefined each call)
+    if not getattr(_stub_chromadb, "_installed", False):
         sys.meta_path.insert(0, _ChromaFinder())
-    # Also clear any already-imported real chromadb modules
+        _stub_chromadb._installed = True
+    # Clear any already-imported real chromadb modules
     for _k in list(sys.modules):
         if _k == "chromadb" or _k.startswith("chromadb."):
             del sys.modules[_k]
@@ -99,20 +100,29 @@ class _silence:
 
 # Patch CrewAI bug: cache_breakpoint key is left in messages for non-Anthropic providers,
 # causing Groq (and others) to reject the request with a 400 validation error.
+_cache_breakpoint_patched = False
+
 def _patch_crewai_cache_breakpoint():
-    from crewai.llm import LLM
-    from crewai.llms.cache import CACHE_BREAKPOINT_KEY
+    global _cache_breakpoint_patched
+    if _cache_breakpoint_patched:
+        return
+    try:
+        from crewai.llm import LLM
+        from crewai.llms.cache import CACHE_BREAKPOINT_KEY
 
-    _original = LLM._format_messages_for_provider
+        _original = LLM._format_messages_for_provider
 
-    def _patched(self, messages):
-        result = _original(self, messages)
-        if not self.is_anthropic:
-            for msg in result:
-                msg.pop(CACHE_BREAKPOINT_KEY, None)
-        return result
+        def _patched(self, messages):
+            result = _original(self, messages)
+            if not self.is_anthropic:
+                for msg in result:
+                    msg.pop(CACHE_BREAKPOINT_KEY, None)
+            return result
 
-    LLM._format_messages_for_provider = _patched
+        LLM._format_messages_for_provider = _patched
+        _cache_breakpoint_patched = True
+    except Exception:
+        pass
 
 load_dotenv()
 
