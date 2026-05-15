@@ -49,12 +49,20 @@ def _stub_chromadb():
     class _ChromaFinder(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path, target=None):
             if fullname == "chromadb" or fullname.startswith("chromadb."):
-                return importlib.machinery.ModuleSpec(fullname, _ChromaLoader())
+                spec = importlib.machinery.ModuleSpec(fullname, _ChromaLoader())
+                spec.submodule_search_locations = []  # tells Python it's a package
+                return spec
             return None
 
     class _ChromaLoader(importlib.abc.Loader):
         def create_module(self, spec):
-            return _AutoStub(spec.name)
+            m = _AutoStub(spec.name)
+            # Set package attrs directly in __dict__ so the dunder guard
+            # in __getattr__ is never triggered for these.
+            m.__path__ = []          # required: marks module as a package
+            m.__package__ = spec.name
+            m.__spec__ = spec
+            return m
         def exec_module(self, module):
             pass
 
