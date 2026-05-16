@@ -1,3 +1,7 @@
+# Copyright (c) 2024 Vijay JPS. All Rights Reserved.
+# Unauthorized copying, modification, distribution, or use of this software,
+# via any medium, is strictly prohibited without the express written permission
+# of the owner.
 import re
 import html as _html
 import json as _json
